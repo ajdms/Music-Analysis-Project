@@ -1,0 +1,1255 @@
+---
+title: "Spotify & Apple Music Data Analysis"
+output: 
+  flexdashboard::flex_dashboard
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(DT)
+library(highcharter)
+library(kableExtra)
+library(ggplot2)
+library(ggridges)
+library(magick)
+library(spotifyr)
+top30 <-read_rds("spotify_tracks_top30.rds")
+mango<- read_csv('mango.csv')
+recently_played <- read_rds("recently_played2.rds")
+join_recently_played <- read_rds("join_recently_played1.rds")
+spotify_lt <- read_rds("spotify_lt.rds")
+spotify_mt <- read_rds("spotify_mt.rds")
+spotify_st <- read_rds("spotify_st.rds")
+iu_eight <- read_rds('iu_eight.rds')
+newid <- 'fefcfa3d6d8f448e9a796c0ca310a37c'
+newsecret <- 'ed250f4405aa4d1d81b0594d194458c4'
+Sys.setenv(SPOTIFY_CLIENT_ID = newid)
+Sys.setenv(SPOTIFY_CLIENT_SECRET = newsecret)
+access_token <- get_spotify_access_token()
+```
+
+Home
+====================================================================================
+Column {data-width=650}
+------------------------------------------------------------------
+### Intro
+<p> Before starting this, I would like to let you know, that I messed up my own project.
+This originally had data from May 11 2020 but because I played around with this right now
+(it's December) the data will now reflect December 23 2020. Enjoy! </p>
+#### Motivation
+<center>![](apple_spotify.png)</center>
+<br></br>
+<p>Welcome to my walkthrough on how to find your Spotify Music data and a walkthrough of my journey to the type of music I listen to through both Spotify and Apple Music. As an avid user of Spotify and Apple Music/iTunes, I’ve been itching to know how my data looked like. I wanted to know who my most played artists were, what are my most played tracks, and how sad/angry/happy/chill my music is. It also just so happen that the COVID-19 lockdown was at its infancy, so this made my data research a bit more interesting, questioning if my music tastes got gloomier during the lockdown. This always raises the question if over the years,did my music reflect my orientation in life. I’ve been told I’m an optimistic person, so I yearned to see if the songs I listen to directly reflect that.</p>
+<p>Studies has shown that the type of music a person listens to reflect their emotional states and their orientation in life. In a study by [Singh & Goyal (2018)]( https://www.researchgate.net/publication/327837771_Musical_preferences_and_their_influence_on_emotional_states_and_the_orientation_towards_life),  they took a sample of 100 female college students and were “separated based upon their preference for upbeat and energetic music or reflective and intense music respectively.” The study found that “individuals who preferred upbeat and energetic music type showed better overall orientation towards life signifying they were more optimistic.”  Furthermore, the optimistic group as “compared to the latter group whose life were dominated not only by a looming shadow of pessimism, but they also showed an overall negative emotional state.” It should be noted that those who had mixed preferences were dropped from the final analysis to broadly identify the two subgroups.
+<p>With that in mind, it was brought to my attention that by using Spotify’s Web API for Developers,  I’m able to extract audio features of all the songs that Spotify has, allowing me to analyze my most frequently played songs on that platform. As for Apple Music, I'm able to download that data for my personal use.</p>
+
+
+#### Aim
+<p>Thus, the aim for this project is to dive into all my most played songs/artists and chart/graph it. Due to the help of Charlie Thompson’s [spotifyr]( https://www.rcharlie.com/spotifyr/) package, his [github]( https://github.com/charlie86/sentify) for his app [Sentify]( http://rcharlie.net/sentify/), I was able to replicate it to analyze my own music data. Each portion is divided into tabs above.</p>
+<p>The second tab after the current home tag is titled "Spotify" and will focus on the Spotify API It showcases a quick tutorial on how to access the Spotify Web API through the package spotifyr. The Spotify Web API allows me to see my most played songs through different time frames, so I will first illustrate the variance of songs played through different time intervals since I first had a Spotify account.</p>
+<p>The next tab is titled "Apple Music" and will cover my data from Apple Music. Arguably uneconomic, I use two streaming platforms to segregate the two main music genres I listen to. Spotify serves as a collection of my indie songs while Apple Music contains all my guilty pleasure/ K-pop songs. More information of the background in the Apple Music analysis tab. As Apple Music doesn't analyze its music the same way as Spotify, the Apple Music tab shows how to use that data to match it with Spotify’s version, then run an analysis and compare it to the Spotify music data. It will also concentrate on utilizing the `Track Play Count` variable that is found only on Apple Music.</p>
+<p>The fourth tab is titled "IU," named after my most played artist on Spotify and Apple Music. It will cover an analysis on that artist and see how her music fairs in terms of how energetic/happy her songs and albums are.</p>
+
+
+Column {data-width=350}
+------------------------------------------------------------------
+
+### Plot
+```{r}
+grapefruit<- mango %>%
+  slice(1:10)
+df2 <- data.frame(x = c(0, .9, 0, .9),
+                      y = c(1, 1, 0, 0),
+                      text = c('Turbulent/Angry',
+                               'Happy/Joyful',
+                               'Sad/Depressing',
+                               'Chill/Peaceful'))
+ds2 <- list_parse(df2)
+
+# Now this is where my lack of html skills comes to play
+# I want to customize my labels using the tooltip function
+
+# below is the tooltip with the album image, it doesnt work for some odd reason
+# refer to https://github.com/rstudio/rmarkdown/issues/429
+
+tltip <- paste0("<img src = '{point.album_small}'
+           height='50px'
+           style=\'float:left;margin-right:5px\'>
+           <b>Track: {point.track_name}</b>
+           <br>Artist: {point.Artist}</b>
+           <br>Play Count: {point.track_play_count}</b>
+           <br>Valence: {point.valence}</b>
+           <br> Energy: {point.energy}</b>")
+#below is the tooltip without the image
+tltip1 <- paste0("<b>Track: {point.Title}</b>
+           <br>Artist: {point.Artist}</b>
+           <br>Play Count: {point.track_play_count}</b>
+           <br>Valence: {point.valence}</b>
+           <br> Energy: {point.energy}</b>")
+renderHighchart({
+  grapefruit %>%
+  hchart(hcaes(x = valence, y = energy, group = Artist), type = 'scatter',
+         tooltip = list(
+           pointFormat =
+             tltip)) %>%
+  hc_yAxis(max = 1, min = 0, title = list(text = 'Energy')) %>%
+  hc_xAxis(max = 1, min = 0, title = list(text = 'Valence')) %>%
+  hc_yAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_xAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_add_series(data = ds2,
+                name="annotations",
+                type = "scatter",
+                color="transparent",
+                showInLegend = FALSE,
+                enableMouseTracking = FALSE,
+                zIndex = 0,
+                dataLabels=list(enabled = TRUE, y=10, format= "{point.text}",
+                                style = list(fontSize = "10px",
+                                             color = "black",
+                                             textOutline="0px"))) %>%
+  hc_tooltip(crossshairs = T,
+             useHTML= TRUE,
+             headerFormat = "",
+             shared = T,
+             pointFormat = "<tr><td style=\"color: {series.color}\">{series.name}: </td><td style=\"text-align: right\"><b>{point.y}</b></td></tr>") %>%
+  hc_credits(
+    enabled = TRUE,
+    text = "Source: github.com/charlie86/sentify",
+    href = "https://github.com/charlie86/sentify") %>% 
+    hc_title(text="Example of what's to come")
+  })
+```
+
+
+### Table 
+```{r}
+grapefruit<- mango %>%
+  slice(1:10)
+grapefruit2<- grapefruit %>% 
+  select(Artist, track_name, Album, track_play_count)
+renderDT(
+  datatable(grapefruit2)
+)
+```
+
+Spotify
+====================================================================================
+Column {.tabset}
+-----------------------------------------------------
+
+### Setup
+
+#### Part 1: Spotify’s Web API and spotifyr
+1. To retrieve your data from Spotify, you would need to sign in with your Spotify account to make a [developer’s account]( https://developer.spotify.com/dashboard/
+). Once you’ve logged in, you’re redirected to the dashboard, in which you will Create a Client ID. By making this app, you’re able to retrieve your Client ID and the Client Secret code. This will also allow you to pull your access token into R.
+<br></br>
+<br></br>
+<center><p>This is where you log in with your Spotify account</p></center>
+<center>![](login.png)</center>
+<br></br>
+<br></br>
+<center><p>You will then be redirected to the dashboard page. Click on Create a Client ID.</p></center>
+<center>![](spotify_dashboard.png)</center>
+<br></br>
+<br></br>
+<center><p>You will be redirected to three pages. It doesn’t matter what you put in the first step.</p></center>
+<center>![](create_app.png)</center>
+<br></br>
+<br></br>
+<center><p>In the second step, make sure that you click non-commercial. On the last step, you will have to agree that you are making a non-commercial app.</p></center>
+<center>![](spotify_developing.png)</center>
+<br></br>
+<br></br>
+<p>Congrats now you’ve created your app/dashboard page! Your Client ID and Client Secret is located on the left of the dashboard page. It’s important to note add in the Redirect URI. This is because [“for certain functions and applications, you’ll need to log in as a Spotify user. To do this, your Spotify Developer application needs to have a callback url and it's a good default option is”](https://www.rcharlie.com/spotifyr/)  to use `http://localhost:1410/`</p>
+<br></br>
+<br></br>
+<center><p>To change the Redirect URI, you’ll click at Edit Settings on the right.</p></center>
+<center>![](spotify_app_ds.png)</center>
+<br></br>
+<br></br>
+<center><p>Then add in http://localhost:1410/ to the Redirect URI link.</p></center>
+<center>![](spotify_lclhost.png)</center>
+<br></br>
+<br></br>
+2. Afterwards, load the following packages and install the package spotifyr.
+```{r libraries to run, eval=F, echo=T}
+library(tidyverse)
+library(highcharter) #interactive plots
+library(DT)
+library(kableExtra)
+install.packages("spotifyr")
+library(spotifyr)
+```
+<br></br>
+3.Once you're done loading those packages, add the following code to R Studio. The following code will pull your access token into R.
+```{r try it out, eval=F, echo=T}
+id <- 'your client ID'
+secret <- 'your client secret'
+Sys.setenv(SPOTIFY_CLIENT_ID = id)
+Sys.setenv(SPOTIFY_CLIENT_SECRET = secret)
+access_token <- get_spotify_access_token()
+```
+<p> Great! Now you’re able to use the sporifyr package! Let’s do some examples.</p>
+
+### Applications
+<br></br>
+<p> Let's look at one of the functions, `get_my_recently_played()`. When using this, Spotify sets a limit as to how many recently played songs you can retrieve. The limit is automatically set to 20 (if you don't specifically call for the argument within the parenthesis) but in my case I put the limit to 10 tracks.</p>
+
+```{r eval=F, echo=T}
+recently_played <- get_my_recently_played(limit=10)
+
+# run the code below
+
+# 1. artist_name takes out a variable within the tibble track.artists which contains the artist's name
+# then puts it back to the original data set
+
+# 2. album_small takes out a varaible within the tibble album.images which contains a link of a 64px of the album image
+# then puts it back to the original data set
+# That variable will be useful later
+# its then renamed and saved to a rds dataset.
+# the data we're extracting has tibbles, and csv can't save those properly. So we use an rds file.
+recently_played <- recently_played %>% 
+  mutate(artist_name = map_chr(track.artists, function(x) x$name[1]), album_small = map_chr(track.album.images, function(x) x$url[3])) %>% 
+  rename(id = track.id, uri = track.uri, track_name = track.name, album = track.album.name) %>% 
+  write_rds("recently_played.rds")
+```
+
+<p>And now you're able to see an interactive data using the kable function. Also, as an extra feature you can click on the link at `uri` column to open that track on Spotify.</p>
+```{r Try this, echo=TRUE, paged.print=TRUE}
+recently_dt<- recently_played %>%
+  mutate(uri = cell_spec(uri, "html", link = uri), album_small = cell_spec(album_small, "html", link = album_small)) %>%
+  select(artist_name, track_name,album,uri, played_at, id, album_small)
+# technically a shiny app so need to use a render function
+shiny::renderUI(
+  HTML(
+    recently_dt %>% 
+      kable("html", escape=FALSE, caption ="Recently Played Tracks") %>% 
+      kable_styling(bootstrap_options = c("hover","condensed","striped"), full_width = F, fixed_thead = T) %>%
+  scroll_box(height = '500px')
+  )
+)
+```
+ Great! It works!
+ 
+<p>Below is a 30 second preview of my recently played song, Caroline by the Citizens!</p>
+<br></br>
+<center><iframe src="https://open.spotify.com/embed/track/2kaP8JHwUuXucjw1rM4CIK" width="300" height="80" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe></center>
+<br></br>
+##### Valence: Happiness Metric
+Now this is where a huge chunk of my analysis will be centered around. The Spotify API allows its users to measure how "happy" a track is based on their own metric called `valence`. As defined by Spotify:
+
+>“A measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry).”
+
+<p>Which is great! I can see how positive or negative my recently played songs are! Although, that doesn't exactly tell me what distinct emotion the song is. A song can be positive but have a negative energy, which is angry. A song can also sound happy but has a mellow vibe, which constitutes as chill/relaxing. As observed by Charlie Thompson on his [Sentify]( http://rcharlie.net/sentify/) app and used by other [blogs](https://towardsdatascience.com/angriest-death-grips-data-anger-502168c1c2f0) that took their own variation of it, they used the `energy` metric as another variable to track the emotion of a song. For example, a song that's high energy but low valence indicates that the song is  "angry." A song that is low energy but has a high energy is considered "chill." Although, what is `energy`?</p>
+>"Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy."
+
+<p>There are four parameters when using these 2 metrics as an emotional barometer; happy, chill, angry, and sad. To get such audio features, we'll use the function `get_track_audio_features()` which uses the track id to find the audio features. For this, it requires a for loop of the original data set to extract the id. Let's go ahead and find the audio features of my recently played songs.</p>
+```{r eval=F, echo=T}
+# First, create an empty dataset
+audios <- NULL
+# Then do a for loop for each unique id from the recently_played dataset to be used in the audio features function
+# The results will then be spewed out to the empty data set
+for(x in unique(recently_played$id)){
+  audios <- rbind(audios, get_track_audio_features(x))
+}
+#Now join the recently_played data set and the audios dataset together by the track id
+join_recently_played<-left_join(recently_played,audios,by="id")
+# Below creates a column for the type of emotion the song is
+join_recently_played <-join_recently_played %>%
+  mutate(emotion = ifelse(valence<=0.5 & energy >= 0.5, "angry",
+                          ifelse(valence>=0.5 & energy <=0.5, "chill",
+                                 ifelse(valence>=0.5 & energy>=0.5, "happy", "sad"))))
+# As a safety measure, let's save the dataset to an rds
+join_recently_played %>% 
+  write_rds("join_recently_played.rds")
+```
+<p>So let's go ahead and see the data, arranging it by descending order of `valence`.</p>
+```{r echo=TRUE}
+# Check the valence
+dt_join_rp<- join_recently_played %>%
+  rename(uri = uri.x) %>% 
+  mutate(uri = cell_spec(uri, "html", link = uri)) %>%
+  select(artist_name, track_name,album,valence,emotion,uri, played_at) %>% 
+  arrange(-valence)
+
+shiny::renderUI(
+  HTML(
+    dt_join_rp %>% 
+      kable("html", escape=FALSE, title="Recently Played Tracks") %>% 
+      kable_styling(bootstrap_options = c("hover","condensed","striped"), full_width = F, fixed_thead = T)
+  )
+)
+```
+
+##### Plotting my Recently Played
+<p>Let's then do a bar graph on my recently played songs' valence and arrange the bar graph in descending order.</p>
+```{r echo=TRUE, fig.height = 5, fig.width = 14, fig.align='center', dpi=90}
+join_rp_column<- dt_join_rp %>% 
+  ggplot(aes(x=reorder(track_name, -valence), y=valence)) +
+  geom_col(color="black", fill="#50b145") +
+  labs(x="Track Name", y="Valence") +
+  ggtitle("Recently Played Tracks' Happiness") + 
+  theme_dark() +
+  theme(plot.title= element_text(hjust=0.5))
+join_rp_column
+```
+<p> Hey, isn't this technically a Shiny App? Well yes, so let's make it interactive using Highcharter.</p>
+```{r fig.height = 5, fig.width = 10, dpi=75, echo=T}
+# tooltip is the hover
+tltipr <- paste0("<img src = '{point.album_small}'
+           height='50px'
+           style=\'float:left;margin-right:5px\'>
+           <b>Track: {point.track_name}</b>
+           <br>Artist: {point.artist_name}</b>
+           <br>Album: {point.album}</b>
+           <br>Valence: {point.valence}</b>")
+join_recently_played <- join_recently_played %>%
+  arrange(-valence)
+# Spotify Black - #191414
+renderHighchart({
+  join_recently_played %>%
+    hchart(hcaes(x = track_name, y = valence), type = 'column',
+           tooltip = list(pointFormat =tltipr), color = c("#1DB954")) %>% #Spotify Green
+    hc_yAxis(max = 1, min = 0, title = list(text = 'Valence')) %>%
+    hc_xAxis(title = list(text = 'Track Name')) %>% 
+    hc_tooltip(crossshairs = T, useHTML= TRUE, headerFormat = "",shared = T) %>% 
+    hc_add_theme(
+      hc_theme_flatdark(
+        chart = list(backgroundColor = "transparent",
+                     divBackgroundImage = "https://hookagency.com/wp-content/uploads/2015/11/subtle-grey-gradient-ui.jpg")
+        )) %>% 
+    hc_title(text="Recently Played <span style=\"color:#1DB954\">Spotify</span> Songs ranked by Valence")
+  })
+```
+
+### Finding Most Played Tracks
+
+#### Retrieving Most Played Tracks on Spotify
+
+<p> Now comes the bulk of my project, which is analyzing my most played songs on Spotify. To find this, we'll use the `get_my_top_artists_or_tracks()`. As before, the limit is automatically set to 20, but we also can adjust the `time_range` of my top played songs. The [Query Parameters](https://developer.spotify.com/documentation/web-api/reference/personalization/get-users-top-artists-and-tracks/) state that `time_range` is</p>
+>"Optional. Over what time frame the affinities are computed. Valid values: long_term (calculated from several years of data and including all new data as it becomes available), medium_term (approximately last 6 months), short_term (approximately last 4 weeks). Default: medium_term."
+
+<p>That's pretty useful. Especially now with COVID-19, I can approximate if I've been listening to sadder songs during quarantine with `time_range` (Dec 23 2020).Let's observe that by extracring it from all three respective time frames. It's also good to note that when extracting this data, the data is organized by how many times you listen to the song, meaning the first row in the dataset will be the top played song in the respective time range.</p>
+```{r eval= FALSE, echo=TRUE}
+spotify_lt <- get_my_top_artists_or_tracks(type='tracks',time_range='long_term', limit=50) %>%
+  mutate(artist_name = map_chr(artists, function(x) x$name[1]),
+         album_small = map_chr(album.images, function(x) x$url[3])) %>%
+  rename(track_name= name, album_name = album.name) %>%
+  write_rds('spotify_lt.rds')
+
+spotify_mt <- get_my_top_artists_or_tracks(type='tracks',time_range='medium_term', limit=50) %>%
+  mutate(artist_name = map_chr(artists, function(x) x$name[1]),
+         album_small = map_chr(album.images, function(x) x$url[3])) %>% 
+   rename(track_name= name, album_name = album.name) %>%
+  write_rds('spotify_mt.rds')
+
+spotify_st <- get_my_top_artists_or_tracks(type='tracks',time_range='short_term', limit=50) %>%
+  mutate(artist_name = map_chr(artists, function(x) x$name[1]),
+         album_small = map_chr(album.images, function(x) x$url[3])) %>% 
+  rename(track_name= name, album_name = album.name) %>%
+  write_rds('spotify_st.rds')
+```
+
+<p>Yay we got all the songs. Now let's do the same set of functions to find the recently played audio features to the 3 data sets that was extracted. I also added a `rank` column which tells me what rank that track is in terms of play count.</p>
+
+```{r eval=FALSE, echo=TRUE}
+# spotify_lt = long term
+audios<-NULL
+for(x in unique(spotify_lt$id)){
+  audios <- rbind(audios, get_track_audio_features(x))
+}
+spotify_lt <- left_join(spotify_lt,audios, by="id")
+spotify_lt %>%
+  rename(uri = uri.x) %>%
+  mutate(emotion = ifelse(valence<=0.5 & energy >= 0.5, "angry",
+                          ifelse(valence>=0.5 & energy <=0.5, "chill",
+                                 ifelse(valence>=0.5 & energy>=0.5, "happy", "sad"))),
+         rank = seq.int(nrow(spotify_lt))) %>%
+  write_rds('spotify_lt.rds')
+
+spotify_lt <- read_rds('spotify_lt.rds')
+
+#spotify_mt = medium term
+audios<-NULL
+for(x in unique(spotify_mt$id)){
+  audios <- rbind(audios, get_track_audio_features(x))
+}
+spotify_mt <- left_join(spotify_mt,audios, by="id")
+spotify_mt %>%
+  rename(uri = uri.x) %>%
+  mutate(emotion = ifelse(valence<=0.5 & energy >= 0.5, "angry",
+                          ifelse(valence>=0.5 & energy <=0.5, "chill",
+                                 ifelse(valence>=0.5 & energy>=0.5, "happy", "sad"))),
+         rank = seq.int(nrow(spotify_mt))) %>% 
+  write_rds('spotify_mt.rds')
+
+spotify_mt <- read_rds('spotify_mt.rds')
+
+#spotify_st = short st
+audios<-NULL
+for(x in unique(spotify_st$id)){
+  audios <- rbind(audios, get_track_audio_features(x))
+}
+spotify_st <- left_join(spotify_st,audios, by="id")
+spotify_st %>%
+  rename(uri = uri.x) %>%
+  mutate(emotion = ifelse(valence<=0.5 & energy >= 0.5, "angry",
+                          ifelse(valence>=0.5 & energy <=0.5, "chill",
+                                 ifelse(valence>=0.5 & energy>=0.5, "happy", "sad"))),
+         rank = seq.int(nrow(spotify_st))) %>% 
+  write_rds('spotify_st.rds')
+
+spotify_st <- read_rds('spotify_st.rds')
+
+```
+
+#### Finding all of the data
+
+<p>Let's now look at every dataset, observing the top 10 played tracks in each respective time range. I'm most interested in my all time played track so above each table, will be a 30 second preview of my most played track of each respective term.</p>
+
+```{r echo=TRUE, paged.print=TRUE, dpi = 50}
+# I'll show the code for only one of the tables. A bit redundant if I showed all the code you reckon?
+lt_dt <- spotify_lt %>%
+  mutate(uri = cell_spec(uri, "html", link = uri)) %>%
+  select(artist_name, track_name,album_name,emotion,uri,rank)
+lt_dt10 <- lt_dt %>% 
+  slice(1:10)
+mt_dt <- spotify_mt %>%
+  mutate(uri = cell_spec(uri, "html", link = uri)) %>%
+  select(artist_name, track_name,album_name,emotion,uri,rank)
+mt_dt10 <- mt_dt %>% 
+  slice(1:10)
+st_dt <- spotify_st %>%
+  mutate(uri = cell_spec(uri, "html", link = uri)) %>%
+  select(artist_name, track_name,album_name,emotion,uri,rank)
+st_dt10 <- st_dt %>% 
+  slice(1:10)
+shiny::renderUI(
+  HTML(
+    lt_dt10 %>% 
+      kable("html", escape=FALSE, caption = "Most Played Tracks over Several Years") %>% 
+      kable_styling(bootstrap_options = c("hover","condensed","striped"), full_width = F, fixed_thead = T) %>%
+  scroll_box(height = '500px')
+  )
+)
+```
+<center>Most played track since I got Spotify:</center>
+<center><iframe src="https://open.spotify.com/embed/track/5RRNZFyOi17nTh2bPEKPtp" width="300" height="80" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe></center>
+<br></br>
+```{r paged.print=TRUE, dpi = 50}
+shiny::renderUI(
+  HTML(
+    mt_dt10 %>% 
+      kable("html", escape=FALSE, caption="Most Played Tracks over approximately 6 Months") %>% 
+      kable_styling(bootstrap_options = c("hover","condensed","striped"), full_width = F, fixed_thead = T) %>%
+  scroll_box(height = '500px')
+  )
+)
+```
+<center>Most played track these past 6 months:</center>
+<center><iframe src="https://open.spotify.com/embed/track/6NFKf8vBApSvtzkapYmnVR" width="300" height="80" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe></center>
+<br></br>
+```{r echo=TRUE, paged.print=TRUE, dpi = 50}
+shiny::renderUI(
+  HTML(
+    st_dt10 %>% 
+      kable("html", escape=FALSE, caption="Most Played Track during Quarantine") %>% 
+      kable_styling(bootstrap_options = c("hover","condensed","striped"), full_width = F, fixed_thead = T) %>%
+  scroll_box(height = '500px')
+  )
+)
+```
+<center>Most played track during Quarantine:</center>
+<center><iframe src="https://open.spotify.com/embed/track/7DnAm9FOTWE3cUvso43HhI" width="300" height="80" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe></center>
+<br></br>
+<p>That's cool I guess? But what about comparing the data side by side observing how many angry/sad/chill/happy songs I listen to? Let's run a data table where we run a `table()` function on all of the terms and compare how many happy/sad/angry/chill songs each term had.</p>
+
+```{r fig.align= 'center', echo=TRUE}
+lt_table<- data.frame(table(lt_dt$emotion))
+mt_table<- data.frame(table(mt_dt$emotion))
+st_table<- data.frame(table(st_dt$emotion))
+
+lt_table<- lt_table %>% 
+  rename(emotion = Var1,
+         lt = Freq)
+mt_table <- mt_table %>% 
+  rename(emotion = Var1,
+         mt = Freq)
+st_table <- st_table %>%
+  rename(emotion = Var1,
+         st = Freq)
+# So the problem is the lt_table doesn't have any chill tracks
+# I'm going to manually add in a chill track variable with the cell being 0
+# write_csv(dt5,"dt5.csv")
+lt_table<- read_csv("dt5.csv")
+
+# setting all of the columns to the same type of data so I can feasibly join it
+lt_table$lt <- as.integer(lt_table$lt)
+lt_table$emotion <- as.character(lt_table$emotion)
+lt_table <- lt_table %>% arrange(-lt)
+
+mt_table$mt <- as.integer(mt_table$mt)
+mt_table$emotion <- as.character(mt_table$emotion)
+mt_table <-  mt_table %>% arrange(-mt)
+
+st_table$st <- as.integer(st_table$st)
+st_table$emotion <- as.character(st_table$emotion)
+st_table <- st_table %>% arrange(-st)
+
+spotify_emotion<-left_join(lt_table,mt_table,by="emotion")
+spotify_emotion <-left_join(spotify_emotion,st_table, by="emotion")
+#not exactly what I want. Want the emotions rows to be columns
+
+spotify_emotion2 <- spotify_emotion %>%
+  pivot_longer(c(st,mt,lt),
+               names_to="time_frame",values_to="count")
+spotify_emotion3 <- spotify_emotion2 %>% 
+  pivot_wider(names_from = emotion,
+              values_from = count,
+              values_fn = list(count = mean))
+# Perfect
+pander::pander(spotify_emotion3)
+```
+
+<p>Awesome. Now we can see that during quarantine, I've been listening to more happy music. In the long-term, I listened to more angry songs. To think that I would listen to sadder or angrier songs but that doesn't seem the case. Should I graph this as well? As this compares multiple terms, let's use `facet_grid()` to display all the terms.</p>
+```{r echo=TRUE, fig.height=4, fig.width=8, fig.align= 'center',dpi=125}
+# reorder allows me to organize it by descending order.
+bar_graph<- ggplot(spotify_emotion2, aes(reorder(emotion,-count), count, fill = emotion)) +
+  geom_col() +
+  theme_bw() +
+  facet_grid(~time_frame) +
+  theme_dark() +
+  labs(x="emotion", y="Number of Songs",title="What kind of songs do I listen to on Spotify?") +
+  theme(plot.title= element_text(hjust=0.5))
+bar_graph
+```
+<p>We can see more clearly that over all the terms, I listen to happier songs. So despite COVID, my most played tracks  consists mostly of happy songs. Safe to say that my personality does reflect the type of songs I listen to and despite the crisis, I still listen to happier music. Why don't we take a look at a plot of how happy/sad/angry/chill those songs in the short term? On the next tab, is a showcase of an interactive plot of my top played short term tracks on Spotify (in other words my top played songs during Quarantine). The code for it is shown below.</p>
+```{r eval=F, echo=T}
+#editing the tooltip argument
+tltip2<- paste0("<img src = '{point.album_small}'
+           height='50px'
+           style=\'float:left;margin-right:5px\'>
+           <b>Track: {point.track_name}</b>
+           <br>Artist: {point.artist_name}</b>
+           <br>Valence: {point.valence}</b>
+           <br>Energy: {point.energy}</b>
+           <br>Rank: {point.rank}<b>")
+
+
+df2 <- data.frame(x = c(0, .9, 0, .9),
+                  y = c(1, 1, 0, 0),
+                  text = c('Turbulent/Angry',
+                           'Happy/Joyful',
+                           'Sad/Depressing',
+                           'Chill/Peaceful'))
+ds2 <- list_parse(df2)
+
+renderHighchart({
+  spotify_st %>%
+  hchart(hcaes(x = valence, y = energy, group = artist_name), type = 'scatter',
+         tooltip = list(
+           pointFormat =
+             tltip2)) %>%
+  hc_yAxis(max = 1, min = 0, title = list(text = 'Energy')) %>%
+  hc_xAxis(max = 1, min = 0, title = list(text = 'Valence')) %>%
+  hc_yAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_xAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_add_series(data = ds2,
+                name="annotations",
+                type = "scatter",
+                color="transparent",
+                showInLegend = FALSE,
+                enableMouseTracking = FALSE,
+                zIndex = 0,
+                dataLabels=list(enabled = TRUE, y=10, format= "{point.text}",
+                                style = list(fontSize = "10px",
+                                             color = "black",
+                                             textOutline="0px"))) %>%
+  hc_tooltip(crossshairs = T,
+             useHTML= TRUE,
+             headerFormat = "",
+             shared = T,
+             pointFormat = "<tr><td style=\"color: {series.color}\">{series.name}: </td><td style=\"text-align: right\"><b>{point.y}</b></td></tr>") %>%
+  hc_credits(enabled = TRUE,
+    text = "Source: github.com/charlie86/sentify",
+    href = "https://github.com/charlie86/sentify") %>% 
+  hc_title(text = "Top Played Short Term Tracks on <span style=\"color:#1DB954\">Spotify</span>") %>% 
+  hc_size(height=600) %>% 
+   hc_add_theme(
+      hc_theme_flatdark(
+        chart = list(backgroundColor = "transparent",
+                     divBackgroundImage ="https://hookagency.com/wp-content/uploads/2015/11/subtle-grey-gradient-ui.jpg")
+        ))
+})
+```
+
+### Top Played Songs During Quarantine
+```{r}
+tltip2<- paste0("<img src = '{point.album_small}'
+           height='50px'
+           style=\'float:left;margin-right:5px\'>
+           <b>Track: {point.track_name}</b>
+           <br>Artist: {point.artist_name}</b>
+           <br>Valence: {point.valence}</b>
+           <br>Energy: {point.energy}</b>
+           <br>Rank: {point.rank}<b>")
+
+
+df2 <- data.frame(x = c(0, .9, 0, .9),
+                  y = c(1, 1, 0, 0),
+                  text = c('Turbulent/Angry',
+                           'Happy/Joyful',
+                           'Sad/Depressing',
+                           'Chill/Peaceful'))
+ds2 <- list_parse(df2)
+
+renderHighchart({
+  spotify_st %>%
+  hchart(hcaes(x = valence, y = energy, group = artist_name), type = 'scatter',
+         tooltip = list(
+           pointFormat =
+             tltip2)) %>%
+  hc_yAxis(max = 1, min = 0, title = list(text = 'Energy')) %>%
+  hc_xAxis(max = 1, min = 0, title = list(text = 'Valence')) %>%
+  hc_yAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_xAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_add_series(data = ds2,
+                name="annotations",
+                type = "scatter",
+                color="transparent",
+                showInLegend = FALSE,
+                enableMouseTracking = FALSE,
+                zIndex = 0,
+                dataLabels=list(enabled = TRUE, y=10, format= "{point.text}",
+                                style = list(fontSize = "10px",
+                                             color = "black",
+                                             textOutline="0px"))) %>%
+  hc_tooltip(crossshairs = T,
+             useHTML= TRUE,
+             headerFormat = "",
+             shared = T,
+             pointFormat = "<tr><td style=\"color: {series.color}\">{series.name}: </td><td style=\"text-align: right\"><b>{point.y}</b></td></tr>") %>%
+  hc_credits(enabled = TRUE,
+    text = "Source: github.com/charlie86/sentify",
+    href = "https://github.com/charlie86/sentify") %>% 
+  hc_title(text = "Top Played <span style=\"color:#1DB954\">Spotify</span> songs during Quarantine 2020") %>% 
+  hc_size(height=600) %>% 
+   hc_add_theme(
+      hc_theme_flatdark(
+        chart = list(backgroundColor = "transparent",
+                     divBackgroundImage ="https://hookagency.com/wp-content/uploads/2015/11/subtle-grey-gradient-ui.jpg")
+        ))
+})
+```
+
+Apple Music
+======================================================================
+Column {.tabset}
+-----------------------------------------------
+
+### Apple Music
+#### Motivation: Why I'm extracting Apple Music data
+<p>(This data is from May 11 2020) As shown, I don't only use Spotify, I also use Apple Music. When I was starting off in college, I decided to branch off from what I know and get into more indie bands/artists, so I bought a Spotify account for me to explore this genre Over time, it became clear that my Apple Music was used for the sole purpose of k-pop/guilty pleasure music while Spotify holds all of my indie/pop songs. It was also for logistic reasons to seperate my genres like this as several years ago, There wasn't much foreign music in Spotify, so all my Filipino and K-pop was mostly found in Apple Music. Recently, I started to blur the lines between these two platforms and now they're both used to hold all  genres of music, though the soft border remains between those two platforms. In that case, I want to find my data on Apple Music to see how they differ in mood.</p>
+#### Extracting Apple Music
+<p>This is a whole other beast. Extracting Apple Music data requires you to sign in to with your Apple ID at [privacy.apple.com](https://privacy.apple.com). There, it asks you what kind of data you want a copy of (Apple Media Services Information) in where it'll take around 5 days for the data to be emailed to you via the account associated to your Apple ID. Now, the problem is, the data that I want was a JSON file. I found myself getting confused on how to change that file to a csv file on R Studio, so I ended up having to use Python to unravel it. They weer simple lines of code, but as that's outside of the scope of this class (as this class is taught in R Studio), I'm going to spare you the details and talk a little bit about my Apple Music csv file.</p>
+<p> There are a bit of variables that I need and was most curious about which are "Artist", "Track Title", "Album", "Track Play Count," a column which tells me how many times I listened to the song. I want it organized by descending order of Track Play Count of the top 100 played songs.</p>
+<br></br>
+
+```{r echo=TRUE, fig.height=5, fig.width=10}
+apple_music <- read_csv('Apple Music Library Tracks.csv')
+top100 <- apple_music %>%
+  select(`Artist`,`Title`,`Track Play Count`,`Date Added To Library`) %>% 
+  arrange(desc(`Track Play Count`)) %>% 
+  slice(1:100)
+top25<- top100 %>% 
+  slice(1:25)
+shiny::renderUI({
+  HTML(
+    kable(top25, caption="Top 25 Most Played Songs") %>% 
+      kable_styling(bootstrap_options = c('condensed', 'striped'), fixed_thead = T) %>% 
+      scroll_box(width = "100%", height = "300px")
+  )
+})
+```
+<br></br>
+<p>Great. So my top played track is a Korean song called Heart by IU.<p>
+<center><iframe allow="autoplay *; encrypted-media *;" frameborder="0" height="150" style="width:100%;max-width:660px;overflow:hidden;background:transparent;" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation" src="https://embed.music.apple.com/us/album/heart/995855731?i=995855732&app=music"></iframe></center>
+<br></br>
+<p>what I want to do is find the audio features of the top 100 played songs. For me to do that, I'll need to find the Spotify equivalent of those tracks. This is so that I can find the id of each track, which will be used to find the audio features. To do that, spotifyr has a search function  called `search_spotify()`. We'll use this to find the Spotify equivalent songs and use a for loop using the title track and artist columns. The `search_spotify()` function allows me to search a track or an artist on Spotify and will spew out results of the data of the track/artist. You can also control how many results you want to render with the agument `limit=#`. Example below:</p>
+ 
+```{r eval=F, echo=T}
+iu_eight<- search_spotify('IU Eight', 'track', limit=5)
+iu_eight<- iu_eight %>%
+  mutate(artist = map_chr(artists, function(x) x$name[1]), album_small = map_chr(album.images, function(x) x$url[3]),
+         uri = cell_spec(uri, "html", link = uri)) %>%
+  rename(track_name = name, album_name = album.name) %>%
+  dplyr::select(artist,track_name,album_name,uri,id)
+```
+
+```{r echo=T}
+shiny::renderUI({
+  HTML(
+    iu_eight %>% 
+      kable('html',escape=F, title="IU Eight search results") %>% 
+  kable_styling(bootstrap_options = c('condensed', 'striped'), fixed_thead = T)
+  )
+})
+```
+<br></br>
+Unfortunately, my Apple Music has some discrepancies. One is that some of my top played songs are of another language and thus the song that I retrieve from Spotify won't match the song from Apple Music. A problem arises when I want to do a for loop for all 100 songs as ideally I want to retrieve only the top result (in other words `limit=1`). As Spotify is in English, it'll render results that may not match the song that I want. Second, some songs on my Apple Music library aren't available on Spotify, meaning that I won't be able to retrieve the audio features of that song.</p>
+<p>To overcome this, I **manually** searched the Apple Music songs on Spotify, and word by word changed the Apple Music dataset to match Spotify's version. Doing that not only makes it easier to do a for loop for the function `search_spotify()`, it als makes it easier for me to `left_join()` the Spotify equivalent songs and Apple Music songs to one dataset. For the songs that aren't available on Spotify due to licensing reasons, I decided to omit those songs and delete it from the data set. Furthermore, I mutated a new column called `search` dedicated to be used as an `x` variable to search the tracks.</p>
+```{r, eval=F,echo=T}
+# From here, I've already meticulously typed every song from the top100 dataset according to its Spotify equivalent
+# or delete the songs that's not available on spotify
+apple <- read_csv("forspotify.csv")
+# mutated a new column called 'search' which contains the artist's name and track title
+# will be used as the x variable for the for loop
+bananas <- apple %>%
+  rename(track_name = Title, track_play_count = `Track Play Count`) %>% 
+  mutate(search = paste(track_name, Artist, sep = ' '))
+# make an empty 'dataset' again, then with the search column, use those variables to retrieve basic track info
+spotifysearch <- NULL
+for(x in bananas$search){
+  spotifysearch <- rbind(spotifysearch,search_spotify(x, 'track', limit=1))
+}
+# then extract the artist's name from the artists tibble and extract the smallest album size available from
+# the album.images tibble
+grapes <- spotifysearch %>%
+  mutate(artist = map_chr(artists, function(x) x$name[1]), album_small = map_chr(album.images, function(x) x$url[3])) %>%
+  rename(track_name = name, album_name = album.name) %>%
+  dplyr::select(artist,track_name,album_name,uri,id,album_small,album.release_date)
+
+# So this has all of the Spotify equivalencies of the Apple Music songs
+# Now let's join those two datasets to one master dataset
+grapes <- left_join(bananas,grapes,by="track_name")
+# there's some duplicates
+grapes <- distinct(grapes)
+
+# After, lets find the audio features using the id's
+audios <- NULL
+for(x in unique(grapes$id)){
+  audios <- rbind(audios, get_track_audio_features(x))
+}
+# Let's join the audio features dataset to the original master dataset
+mango <- left_join(grapes, audios, by="id")
+mango<- mango %>% 
+  rename(uri = uri.x) %>% 
+  select(-uri.y)
+# Alright, we did it!
+#write_csv(mango, "mango.csv")
+mango <- read_csv("mango.csv")
+# (Actually had to do some last minute cleaning up bc there are some "duplicate" songs. It was the same song but
+#  from different albums, so I added those duplicates to one row)
+```
+<br></br>
+<p>Boy that sure took a lot of tidying. Let's take a look at the top 25 played songs in my Apple Music library with Spotify Music audio features.</p>
+
+```{r}
+strawberry <- mango %>% 
+  slice(1:25) %>% 
+  select(Artist, track_name, Album, track_play_count, uri,valence, energy, tempo)
+
+shiny::renderUI({
+  HTML(
+    strawberry %>%
+      kable('html',escape=F, title="Top 25 played songs on my Apple Music Library") %>% 
+      kable_styling(bootstrap_options = c('condensed', 'striped','hover'), fixed_thead = T) %>% 
+       scroll_box(width = "100%", height = "300px")
+  )
+})
+```
+
+### Analysis Part 2
+#### Track Play Count Bar Graph
+<p>Alright let's do some visualizations. The fact that Apple Music allows its users to see its track play count is very powerful in analyzing my listening activity. Taking full advantage of such data and also combining it with Spotify analytics, allows me to do multitudes of visuals. Let's run a bar chart again on my top 25 played songs.</p>
+```{r echo=T}
+tltip <- paste0("<img src = '{point.album_small}'
+           height='50px'
+           style=\'float:left;margin-right:5px\'>
+           <b>Track: {point.track_name}</b>
+           <br>Artist: {point.Artist}</b>
+           <br>Play Count: {point.track_play_count}</b>
+           <br>Emotion: {point.emotion}</b>")
+
+
+
+color <- c("#fa57c1","#b166cc","#7572ff","#69a6f9") #Apple Music Colors
+manga <- mango %>%
+  slice(1:25)
+manga$color <- colorize(log(manga$track_play_count), color)
+renderHighchart({
+  manga %>% 
+    hchart(hcaes(x = track_name, y = track_play_count,  color = color), type = 'column',
+           tooltip = list(pointFormat =tltip)) %>%
+    hc_yAxis(title = list(text = 'Track Play Count')) %>%
+    hc_xAxis(title = list(text = 'Track Name')) %>% 
+    hc_tooltip(crossshairs = T, useHTML= TRUE, headerFormat = "",shared = T) %>%
+    hc_add_theme(hc_theme_gridlight()) %>% 
+    hc_size(height=300, width=700) %>% 
+    hc_title(text= "Top Played <span style=\"color:#b166cc\"> Apple Music</span> Tracks Ranked by Play Count")
+  })
+```
+<br></br>
+#### Manipulating `Track Play Count` Variable
+<p>The caveat with the Spotify data is again, not being able to see how many times you listen to a track. What I did to compensate that was add a ranking column (as getting the data automatically sorts the data by how much you listen). So rather than counting how many of my most played songs are happy/sad/angry/chill, I can count within my most played songs, how many times were the tracks either, angry, chill, happy, or sad.</p>
+```{r echo=TRUE, fig.align='center'}
+mango_table<- data.frame(table(mango$emotion))
+# bagoong is this shrimp paste used when eating green mangos in the Philippines
+bagoong<- aggregate(mango$track_play_count, by=list(emotion= mango$emotion), FUN=sum) %>% 
+  arrange(-x)
+pander::pander(bagoong)
+```
+<br></br>
+#### Track Play Count By Emotion
+<p>For fun, let's run a bar graph on track play count on emotion.</p>
+```{r fig.height=4, fig.width=8, fig.align= 'center',dpi=100}
+bagoong_bar<- ggplot(bagoong, aes(reorder(emotion,-x), x, fill = emotion)) +
+  geom_col() +
+  theme_minimal() +
+  labs(x="emotion", y="Track Play Count", title="Track Play Count organized by Emotion") +
+  scale_fill_manual(values=c("#fa57c1","#b166cc","#7572ff","#69a6f9")) +
+  theme(plot.title= element_text(hjust=0.5))
+bagoong_bar
+```
+<br></br>
+By a huge margin, I play more happy songs in general than any other emotion.
+<br></br>
+##### Most Played Artist & Comparing Spotify
+<p>On that tangent, let's find my top artist by how many times I listened to them.</p>
+```{r}
+most_played_artist <- apple_music %>%
+  dplyr::select(`Artist`, `Track Play Count`) %>%
+  group_by(`Artist`) %>%
+  summarise(total = sum(`Track Play Count`)) %>%
+  arrange(-total) %>% 
+  slice(1:16)
+pander::pander(most_played_artist)
+```
+<br></br>
+Amazing, by a huge margin, IU is my most played artist. Also, as it's named differently, the total amount I listen to IU is actually 7659 times. So how big of a margin is that compared to the other artists?
+
+```{r fig.aling='center',echo=TRUE, fig.dim=c(12,5)}
+#write_csv(most_played_artist,"most_played_artist.csv")
+#adding it up
+most_played_artist <- read_csv("most_played_artist.csv")
+most_played_plot <-ggplot(most_played_artist, aes(reorder(Artist,-total), total, fill = Artist)) +
+  geom_col() +
+  theme_minimal() +
+  labs(x="Artist", y="Track Play Count", title="Track Play Count organized by Artist") +
+  theme(plot.title= element_text(hjust=0.5),
+        legend.position = "none")
+most_played_plot
+```
+<br></br>
+<p>Gosh that's a huge margin. No doubt IU is my favorite artist judging from my play count. What about in Spotify? What artist do I listen to the most in the long-term? Hopefully it's not IU too.</p>
+```{r eval=F, echo=TRUE}
+spotify_top_artists<- get_my_top_artists_or_tracks(type="artists", time_range = "long_term", limit=15) %>%
+  select(name)
+spotify_top_artists %>% 
+  write_csv("spotify_top_artists.csv")
+pander::pander(spotify_top_artists)
+```
+
+```{r fig.align='center'}
+spotify_top_artists <- read_csv("spotify_top_artists.csv")
+pander::pander(spotify_top_artists)
+```
+<br></br>
+<p>That's no surprise to anyone. IU has seeped in to my Spotify as well. We'll talk about her later in the next main tab. For now, let's also compare the plots of the long term Spotify with the Apple Music data.</p>
+<br></br>
+##### Apple Music 50 Most Played Songs
+```{r}
+tltip <- paste0("<img src = '{point.album_small}'
+           height='35px' width='35px'
+           style=\'float:left;margin-right:5px\'>
+           <b>Track: {point.track_name}</b>
+           <br>Artist: {point.Artist}</b>
+           <br>Play Count: {point.track_play_count}</b>
+           <br>Valence: {point.valence}</b>
+           <br> Energy: {point.energy}</b>")
+
+df2 <- data.frame(x = c(0, .9, 0, .9),
+                      y = c(1, 1, 0, 0),
+                      text = c('Turbulent/Angry',
+                               'Happy/Joyful',
+                               'Sad/Depressing',
+                               'Chill/Peaceful'))
+
+renderHighchart({
+  mango %>%
+    slice(1:50) %>% 
+    hchart(hcaes(x = valence, y = energy, group = Artist), type = 'scatter',
+         tooltip = list(
+           pointFormat =
+             tltip)) %>%
+  hc_yAxis(max = 1, min = 0, title = list(text = 'Energy')) %>%
+  hc_xAxis(max = 1, min = 0, title = list(text = 'Valence')) %>%
+  hc_yAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_xAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_add_series(data = ds2,
+                name="annotations",
+                type = "scatter",
+                color="transparent",
+                showInLegend = FALSE,
+                enableMouseTracking = FALSE,
+                zIndex = 0,
+                dataLabels=list(enabled = TRUE, y=10, format= "{point.text}",
+                                style = list(fontSize = "10px",
+                                             color = "black",
+                                             textOutline="0px"))) %>%
+  hc_tooltip(crossshairs = T,
+             useHTML= TRUE,
+             headerFormat = "",
+             shared = T,
+             pointFormat = "<tr><td style=\"color: {series.color}\">{series.name}: </td><td style=\"text-align: right\"><b>{point.y}</b></td></tr>") %>%
+  hc_credits(
+    enabled = TRUE,
+    text = "Source: github.com/charlie86/sentify",
+    href = "https://github.com/charlie86/sentify") %>% 
+  hc_title(text="Most Played <span style=\"color:#b166cc\"> Apple Music</span> Songs of All Time")
+  })
+```
+<br></br>
+<br></br>
+##### Spotify 50 Most Played Songs
+```{r}
+tltip2<- paste0("<img src = '{point.album_small}'
+           height='50px'
+           style=\'float:left;margin-right:5px\'>
+           <b>Track: {point.track_name}</b>
+           <br>Artist: {point.artist_name}</b>
+           <br>Valence: {point.valence}</b>
+           <br>Energy: {point.energy}</b>
+           <br>Rank: {point.rank}<b>")
+
+
+df2 <- data.frame(x = c(0, .9, 0, .9),
+                  y = c(1, 1, 0, 0),
+                  text = c('Turbulent/Angry',
+                           'Happy/Joyful',
+                           'Sad/Depressing',
+                           'Chill/Peaceful'))
+ds2 <- list_parse(df2)
+
+renderHighchart({
+  spotify_lt %>% 
+    hchart(hcaes(x = valence, y = energy, group = artist_name), type = 'scatter',
+         tooltip = list(
+           pointFormat =
+             tltip2)) %>%
+  hc_yAxis(max = 1, min = 0, title = list(text = 'Energy')) %>%
+  hc_xAxis(max = 1, min = 0, title = list(text = 'Valence')) %>%
+  hc_yAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_xAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_add_series(data = ds2,
+                name="annotations",
+                type = "scatter",
+                color="transparent",
+                showInLegend = FALSE,
+                enableMouseTracking = FALSE,
+                zIndex = 0,
+                dataLabels=list(enabled = TRUE, y=10, format= "{point.text}",
+                                style = list(fontSize = "10px",
+                                             color = "black",
+                                             textOutline="0px"))) %>%
+  hc_tooltip(crossshairs = T,
+             useHTML= TRUE,
+             headerFormat = "",
+             shared = T,
+             pointFormat = "<tr><td style=\"color: {series.color}\">{series.name}: </td><td style=\"text-align: right\"><b>{point.y}</b></td></tr>") %>%
+  hc_credits(
+    enabled = TRUE,
+    text = "Source: github.com/charlie86/sentify",
+    href = "https://github.com/charlie86/sentify") %>% 
+    hc_title(text="Most Played <span style=\"color:#1DB954\">Spotify</span> Songs of All Time") %>%
+    hc_add_theme(
+      hc_theme_flatdark(
+        chart = list(backgroundColor = "transparent",
+                     divBackgroundImage ="https://hookagency.com/wp-content/uploads/2015/11/subtle-grey-gradient-ui.jpg")
+        ))
+  })
+```
+<br></br>
+#### Comparing Emotion
+<p>Remember how I did a facet grid on each term on my Spotify Data? Let's run the same thing but with Spotify and Apple Music.</p>
+```{r fig.center = 'center', echo=TRUE}
+papaya <- mango %>% 
+  slice(1:50)
+apple_table <-data.frame(table(papaya$emotion))
+apple_table<- apple_table %>% 
+  rename(emotion = Var1,
+         apple = Freq)
+#write_csv(apple_table,"apple_table.csv")
+
+apple_table<-read_csv("apple_table.csv")
+
+apple_table$emotion <- as.character(apple_table$emotion)
+apple_table$apple <- as.integer(apple_table$apple)
+spotify_table <- lt_table %>% 
+  rename(spotify = lt)
+apple_spotify<-left_join(apple_table,spotify_table,by="emotion")
+# not exactly what I want. Want the emotions rows to be columns
+apple_spotify2 <- apple_spotify %>%
+  pivot_longer(c(apple,spotify),
+               names_to="platform",values_to="count")
+# perfect. let's run a table
+pander::pander(apple_spotify)
+```
+<br></br>
+```{r fig.center = 'center', echo=TRUE}
+apple_spotify_gg<- ggplot(apple_spotify2, aes(reorder(emotion,-count), count, fill = emotion)) +
+  geom_col() +
+  theme_bw() +
+  facet_grid(~platform) +
+  theme_dark() +
+  labs(x="emotion", y="Number of Songs",title="What kind of songs do I listen to on each platform?") +
+  theme(plot.title= element_text(hjust=0.5))
+apple_spotify_gg
+```
+<br></br>
+<p>So within my top 50 songs on the two platforms, I listen to more happy songs. In Apple Music, I listen to a lot more Let's compare the averages of those valences to see how truly happy those songs are. As we can see below Apple Music has "happier" songs judging on valence.</p>
+```{r fig.align='center', echo=T}
+apple_avgval<- papaya %>% 
+  filter(emotion=="happy") %>% 
+  summarise(apple_avgval = mean(valence))
+apple_avgval<-as.data.frame(apple_avgval)
+spotify_avgval<- spotify_lt %>%
+  filter(emotion=="happy") %>% 
+  summarise(spotify_avgval = mean(valence))
+spotify_avgval <- as.data.frame(spotify_avgval)
+avgval<-merge(apple_avgval,spotify_avgval)
+pander::pander(avgval)
+```
+<br></br>
+
+IU
+======================================================================
+Column {.tabset}
+-------------------------------------------------
+### IU
+#### Who is IU?
+```{r fig.align='center', echo=TRUE}
+# For the funs
+# if you want to
+# courtesy to Charlie Thompson
+# https://www.rcharlie.com/blog/thom-yorke/
+background <- image_read('danceplot2.png')
+iu_dance <- image_read('iu_palette_transparent.gif')
+
+
+frames <- map(1:length(iu_dance), function(frame){
+  image_composite(background, iu_dance[frame])
+})
+
+lol_iu<- image_animate(image_join(frames), fps = 10, loop = 0)
+lol_iu
+```
+<p> IU is a renowned South Korean artist and actress. She debuted in 2008 with the song called Lost Child. Her big breakthrough song was a song called "Good Day" which garnered a long list of successes to follow. I began to follow her closely in 2013 when she released one of my favorite albums of all time, Modern Times. A concept album centering around the 20's and 30's sound, it was an album that perfected such sound. At that time, I've never heard a concept album done so well and on the dot like what IU did. I was very impressed so I began to listen to her previous work and await for her new releases. Since then, she never seem to disappoint me. What I really like about her was that sometimes, she would release songs that would provide an introspection of her own life over the years. Songs like [Twenty-Three](https://www.youtube.com/watch?v=42Gtm4-Ax2U), [Palette](https://www.youtube.com/watch?v=d9IxdwEFk1c), [BBIBBI](https://www.youtube.com/watch?v=nM0xDI5R50E) recently [eight](https://www.youtube.com/watch?v=TgOu00Mf3kI) brings a sense of introspection that either resonates or challenges the South Korean public. Her popularity and some of her songs in Korea are in the same vein as Adele, but with a lighter touch to it, similar to Thank You, Next by Ariana Grande.</p>
+<br></br>
+<center>IU's Breakthrough Song: Good Day</center>
+<center><iframe width="560" height="315" src="https://www.youtube.com/embed/jeqdYqsrsA0" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></center>
+<br></br>
+<center><p>Modern Times Album:</p></center>
+<center><iframe src="https://open.spotify.com/embed/album/2QcuXvQBWv1ZKyQtEhLbFe" width="300" height="380" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe></center>
+<br></br>
+##### Analysis
+<p>Let's do some final analysis. Let's run the `get_artist_audio_features()` function which allow me to retrieve audio features of every song done by such artist. We can also use the argument `include_groups` to specify where the tracks came from (in this case, I'm including album and single).</p>
+```{r eval=F, echo=T}
+iu_audio<-get_artist_audio_features('IU', include_groups =c("album", "single"))
+
+iu_audio2 <- iu_audio %>%
+  rename(uri = track_uri) %>% 
+  mutate(album_small = map_chr(album_images, function(x) x$url[3]), uri = cell_spec(uri, "html", link = uri))
+
+# to make it easier to rbind later, I'm going to have the two datasets have the same exact columns
+iu_audio3 <- iu_audio2 %>%
+  rename(id=track_id) %>% 
+  select(artist_name,track_name,album_name,album_release_date,album_release_year,uri,album_small,danceability,energy,loudness,speechiness,acousticness,liveness,valence,tempo)
+write_csv(iu_audio3,"iu_audios.csv")
+```
+<br></br>
+<p>Yay, we can do an analysis on IU's tracks! Since most of my songs are happy, I wonder if there's a correlation between how happy those tracks are and how many times I listen to those tracks. For simiplicity reasons, I decided to do the tracks by IU in the tidy dataset `mango.csv`. As shown below, it seems that an upward change in valence, only accounts for a small $R^2$ of 0.16, meaning that it explains variation from to an additional valence 16% of the time. Also, the p-value is 0.07, meaning that it's not that statistically significant.</p>
+```{r echo=T}
+iu_audios<-read_csv("iu_audios.csv")
+iu_valence <-iu_audios %>%
+  arrange(-valence) %>% 
+  select(track_name, valence, album_name)
+top_played_iu<- mango %>% 
+  filter(Artist=="IU") %>%
+  select(Artist, track_name,track_play_count,valence) %>% 
+  arrange(-valence)
+pander::pander(summary(lm(track_play_count ~ valence,top_played_iu)))
+```
+<br></br>
+<p>Why don't we run the same linear regression but on the average valence of each album? As it turns out, the $R^2$ is a lot smaller, calling for around 5% variation. Importantly, the p-value is 0.36, which is very statistically insignificant. In conclusion, my track play count isn't indicative of "happy" her songs are.</p>
+```{r IU Albums Valence, echo=T}
+iu_audios<-read_csv("iu_audios.csv")
+iu_albums_avgval <- aggregate(iu_audios$valence, by=list(album_name = iu_audios$album_name), FUN=mean) %>%
+  rename(avg_valence = x) %>% 
+  arrange(-avg_valence)
+#write_csv(iu_albums_avgval,"iu_albums_avgval.csv")
+
+iu_albums_avg_energy <- aggregate(iu_audios$energy, by=list(album_name = iu_audios$album_name), FUN=mean) %>%
+  rename(avg_energy = x) %>% 
+  arrange(-avg_energy)
+iu_avg_plot<- left_join(iu_albums_avgval,iu_albums_avg_energy, by="album_name")
+apple_iu<- apple_music %>% 
+  filter(Artist=="아이유 (IU)" | Artist=="IU") %>% 
+  select(Artist,`Title`,`Album`,`Track Play Count`) %>% 
+  rename(track_play_count = `Track Play Count`)
+
+iu_albums_sumtracks <- aggregate(apple_iu$track_play_count, by=list(album_name = apple_iu$Album), FUN=sum) %>%
+  rename(track_play_count = x) %>% 
+  arrange(-track_play_count)
+#write_csv(iu_albums_sumtracks,"iu_albums_sumtracks.csv")
+
+#what I did in between writing and reading is that I changed the album names in the iu_albums_sumtracks.csv
+#to match exactly to the spotify version of it
+
+iu_albums_sumtracks <- read_csv("iu_albums_sumtracks.csv")
+iu_album_combine<- left_join(iu_avg_plot,iu_albums_sumtracks, by="album_name")
+iu_album_combine<- iu_album_combine %>% 
+  na.omit(TRUE)
+#write_csv(iu_album_combine,"iu_albums_avg_happy.csv")
+iu_album_combine1<- read_csv("iu_albums_avg_happy2.csv")
+iu_small_album<- iu_audios %>% 
+  group_by(album_name) %>% 
+  select(album_name,album_small)
+iu_album_combine<- left_join(iu_album_combine1,iu_small_album, by="album_name")
+iu_album_combine <- iu_album_combine %>% 
+  distinct(album_name, .keep_all=TRUE)
+
+pander::pander(summary(lm(track_play_count ~ avg_valence,iu_album_combine)))
+```
+<br></br>
+<p>Out of curiosity, let's see a plot of the average valence and the average energy of each of her albums.</p> 
+```{r}
+tltipalbums <- paste0("<img src = '{point.album_small}'
+           height='50px'
+           style=\'float:left;margin-right:5px\'>
+           <b>Album: {point.album_name}</b>
+           <br>Avg Valence: {point.avg_valence}</b>
+           <br>Avg Energy: {point.avg_energy}</b>
+           <br>Track Play Count: {point.track_play_count}</b>
+           <br> Album Release: {point.album_release_year}</b>")
+
+df2 <- data.frame(x = c(0, .9, 0, .9),
+                      y = c(1, 1, 0, 0),
+                      text = c('Turbulent/Angry',
+                               'Happy/Joyful',
+                               'Sad/Depressing',
+                               'Chill/Peaceful'))
+renderHighchart({
+  iu_album_combine %>%
+    slice(1:50) %>% 
+    hchart(hcaes(x = avg_valence, y = avg_energy, group=album_name), type = 'scatter',
+         tooltip = list(
+           pointFormat =
+             tltipalbums)) %>%
+  hc_yAxis(max = 1, min = 0, title = list(text = 'Energy')) %>%
+  hc_xAxis(max = 1, min = 0, title = list(text = 'Valence')) %>%
+  hc_yAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_xAxis(plotLines = list(list(
+    value = .5,
+    color = 'black',
+    width = 2,
+    zIndex = 2))) %>%
+  hc_add_series(data = ds2,
+                name="annotations",
+                type = "scatter",
+                color="transparent",
+                showInLegend = FALSE,
+                enableMouseTracking = FALSE,
+                zIndex = 0,
+                dataLabels=list(enabled = TRUE, y=10, format= "{point.text}",
+                                style = list(fontSize = "10px",
+                                             color = "black",
+                                             textOutline="0px"))) %>%
+  hc_tooltip(crossshairs = T,
+             useHTML= TRUE,
+             headerFormat = "",
+             shared = T,
+             pointFormat = "<tr><td style=\"color: {series.color}\">{series.name}: </td><td style=\"text-align: right\"><b>{point.y}</b></td></tr>") %>%
+  hc_credits(
+    enabled = TRUE,
+    text = "Source: github.com/charlie86/sentify",
+    href = "https://github.com/charlie86/sentify") %>% 
+  hc_title(text="Average <span style=\"color:#cac5fa\"> 'Happiness'</span> of IU's Albums")
+  })
+```
+<br></br>
+
+<p>Lastly, let's see an interactive bar chart of my top played IU songs in my `mango.csv` file.</p>
+
+```{r}
+tltip <- paste0("<img src = '{point.album_small}'
+           height='50px'
+           style=\'float:left;margin-right:5px\'>
+           <b>Track: {point.track_name}</b>
+           <br>Album: {point.Album}</b>
+           <br>Track Play Count: {point.track_play_count}</b>
+           <br>Valence: {point.valence}</b>
+           <br>Energy: {point.energy}</b>")
+iu_mango <- mango %>%
+  filter(Artist=="IU") %>% 
+  arrange(-track_play_count)
+renderHighchart({
+  iu_mango %>%
+    hchart(hcaes(x = track_name, y = track_play_count), type = 'column',
+           tooltip = list(pointFormat =tltip), color = c("#cac5fa")) %>% #Spotify Green
+    hc_yAxis(title = list(text = 'Track Play Count')) %>%
+    hc_xAxis(title = list(text = 'Track Name')) %>% 
+    hc_tooltip(crossshairs = T, useHTML= TRUE, headerFormat = "",shared = T) %>% 
+    hc_title(text="Tracks by <span style=\"color:#cac5fa\">IU</span> ranked by Track Play Count")
+  })
+```
+
+### Conclusion
+<center>![](https://66.media.tumblr.com/2f683e8c800396dc513ce699fc7a2d06/52a9f4976b804a11-82/s1280x1920/ecb8f786a953456d1bb2e713636d44409e28e49e.gifv)</center>
+<p>Overall, it was interesting to see the capabilities I can do with Spotify's API and the data I extracted from Apple Music. From seeing how my long term Spotify songs faired compared to my short term songs, and observing the differences in music of my Spotify and Apple Music songs, it was intriguing to get to know my own data. What would make the happiness metric more accurate was take into account the lyrics of the songs I listened to. Granted, as I don't know Korean myself and most of my top played songs are of another language, I felt that lyrics does not serve a factor in how much I listen to a particular song. It seems to be that its the composition of the song and the artist, rather than the lyrics that serves as an indicator for me whether I'd like the song or not. Either way, it'll be interesting if I could factor in lyrics to the happiness metric, as there are [blogs](https://towardsdatascience.com/angriest-death-grips-data-anger-502168c1c2f0) that have taken to account of how "angry" a song is taken into account the lyrics. If it were done on my music, it would've been a huge feat for me to do as that means I'd have to extract Korean, Filipino, and English lyrics into account. While doing this project, I found a greater appreciation for R and its capabilities. The enumerable amount of visualizations and analysis I can do with R that I've discovered while doing this project has made me comfortable with the language, feeling apt to tackle the next level. It was also a breakthrough for me as the more I played around with R, the quicker I was able to find solutions to my problems. 
+On a less serious note, I also noticed that I listen to mostly female artists that are upbeat or sad, so maybe this is a wake-up call for me to diversify my music taste.</p>
